@@ -38,32 +38,60 @@ const main = async () => {
    *
    * Create a new Transaction instance from the @mysten/sui/transactions module.
    */
+  const tx = new Transaction();
 
   /**
    * Task 2:
    *
    * Create a new key using the `key::new` function.
    */
+  const key = tx.moveCall({
+    target: `${PACKAGE_ID}::key::new`,
+  });
 
   /**
    * Task 3:
    *
    * Set the key code correctly using the `key::set_code` function.
    */
+  // First, fetch the vault object to get the code
+  const vaultObject = await suiClient.getObject({
+    id: VAULT_ID,
+    options: { showContent: true },
+  });
+
+  if (!vaultObject.data?.content || vaultObject.data.content.dataType !== "moveObject") {
+    throw new Error("Could not fetch vault object");
+  }
+
+  const vaultFields = vaultObject.data.content.fields as any;
+  const code = vaultFields.code;
+
+  console.log("Vault code found:", code);
+
+  tx.moveCall({
+    target: `${PACKAGE_ID}::key::set_code`,
+    arguments: [key, tx.pure.u64(code)],
+  });
 
   /**
    * Task 4:
    *
    * Use the key to withdraw the `SUI` coin from the vault using the `vault::withdraw` function.
    */
-  
+  const [coin] = tx.moveCall({
+    target: `${PACKAGE_ID}::vault::withdraw`,
+    arguments: [tx.object(VAULT_ID), key],
+    typeArguments: ["0x2::sui::SUI"],
+  });
 
   /**
    * Task 5:
    *
    * Transfer the `SUI` coin to your account.
    */
-
+  const suiAddress = keypair.getPublicKey().toSuiAddress();
+  tx.transferObjects([coin], suiAddress);
 
   /**
    * Task 6:
@@ -75,13 +103,20 @@ const main = async () => {
    * Resources:
    * - Observing transaction results: https://sdk.mystenlabs.com/typescript/transaction-building/basics#observing-the-results-of-a-transaction
    */
+  const result = await suiClient.signAndExecuteTransaction({
+    transaction: tx,
+    signer: keypair,
+  });
 
+  console.log("Transaction result:", result);
+  console.log("Transaction digest:", result.digest);
+  console.log("Congratulations! You've completed the scavenger hunt!");
 
   /**
    * Task 7: Run the script with the command below and ensure it works!
-   * 
+   *
    * pnpm scavenger-hunt
-   * 
+   *
    * Verify the transaction on the Sui Explorer: https://suiscan.xyz/testnet/home
    */
 };
